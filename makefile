@@ -1,15 +1,22 @@
 # Compiler and flags
 CXX=g++
-CXXFLAGS=
-#Targets 
-all: Final_Project clean
-Final_Project: Final_Project.o
-$(CXX) -o Final_Project Final_Project.o
+CXXFLAGS= -std=c++17 -wall -g -Wextra -pthread
+LDFLAGS  := -pthread
+
+# Targets
+TARGET = Final_Project
+OBJS = Final_Project.o
+
+all: $(TARGET) clean
+
+$(TARGET): $(OBJS)
+  $(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) $(LDFLAGS)
+
 #This target creates Final_Project.o from Final_Project.cpp
 Final_Project.o: Final_Project.cpp
-  $(CXX) -c Final_Project.cpp $(CXXFLAGS)
-#The clean target is a conventional target
-# for removing all files the makefile created.
+  $(CXX) -c Final_Project.cpp $(CXXFLAGS) $(LDFLAGS)
+
+# For removing all object files the makefile created.
 .PHONY: clean
 clean:
-  rm -f *.o
+  rm -f $(TARGET) $(OBJS)
