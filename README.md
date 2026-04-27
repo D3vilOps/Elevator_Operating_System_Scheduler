@@ -69,7 +69,7 @@ This will produce an executable named `scheduler_os`.
 | Repository setup | ✅ Complete |
 | QA Test Case Framework | ✅ Complete |
 | Initial code structure | 🔄 In Progress |
-| API communication | ⏳ Pending |
+| API communication | 🔄 In Progress |
 | Multithreading implementation | ⏳ Pending |
 | Scheduler logic | ⏳ Pending |
 | Testing and validation | ⏳ Pending |
