@@ -4,7 +4,7 @@ Title        : Elevator Scheduler.cpp
 Description  : 
 Author       : Triston Schwab (R#11940154)
 Date         : 4/27/2026
-Version      : 1.0
+Version      : 0.2
 Usage        : 
 Notes        : Requires available port, 127.0.0.1:<port> to work.
              : Does not hard code a port value. 
