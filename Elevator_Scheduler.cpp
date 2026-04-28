@@ -1,10 +1,11 @@
 /*
 ================================================================================
 Title        : Elevator Scheduler.cpp
-Description  : 
+Description  : Elevator Scheduler for working with Elevator_OS by 
+             : Eric Rees for CS4352 final project.
 Author       : Triston Schwab (R#11940154)
 Date         : 4/27/2026
-Version      : 0.2
+Version      : 0.3
 Usage        : 
 Notes        : Requires available port, 127.0.0.1:<port> to work.
              : Does not hard code a port value. 
@@ -14,9 +15,11 @@ C++ Version  : C++ 17
 
 //Standard CPP libraries
 #include <iostream>
+#include <vector>
 #include <string>
 #include <sstream>
 #include <cstring>
+#include <fstream>
 
 //Unix and Linux libraries for creating the network
 #include <unistd.h>
@@ -105,14 +108,13 @@ string parseField(const string &body, const string &key) {
 }
 
 /*
-* selectElevator: 
+* selectElevator: Takes elevator ids read from 
+* the building file from main.
 */
-string selectElevator(int startFloor, int endFloor) {
-    //Temporary Test ids for the API Testing
-    //!NEED TO BE FIXED AND REPLACED LATER!
-    vector<string> elevatorIDs = { "A", "B", "C" };
-
-    for (const& eid : elevatorIDs) {
+string selectElevator(int startFloor, int endFloor, const vector<string>& elevatorIDs) {
+    
+    for (const string& eid : elevatorIDs) 
+    {
         string resp = sendRequest("GET", "/ElevatorStatus/" + eid, "", "");
         string body = getBody(resp);
         if (body == "DNE" || body.empty())
@@ -122,23 +124,41 @@ string selectElevator(int startFloor, int endFloor) {
 
         int lowest = stoi(parseField(body, "lowest"));
         int highest = stoi(parseField(body, "highest"));
-        
-        if ((startFloor >= lowest && startFloor <= highest) 
-            && (endFloor >= lowest && endFloor <= highest))
+
+        if ((startFloor >= lowest && startFloor <= highest) &&
+            (endFloor >= lowest && endFloor <= highest))
         {
             return eid;
         }
     }
     //No valid elevator exists
     return "";
+    
 }
 
 /*
  * main function: 
  */
 int main(int argc, char *argv[]) {
-    if (argc < 2) return 1;
-    g_port = stoi(argv[1]); //Stores the port number for the session
+    if (argc < 3) return 1;
+    ifstream buildingFile(argv[1]);
+    g_port = stoi(argv[2]); //Stores the port number for the session
+    vector<string> elevatorIDs;
+    string line;
+
+    while (getline(buildingFile, line)) 
+    {
+        if (line.empty())
+        {
+            continue;
+        }
+
+        istringstream iss(line);
+        string bay;
+        iss >> bay;
+        elevatorIDs.push_back(bay);
+    }
+
 
     sendRequest("PUT", "/Simulation/start", "", "");
 
@@ -146,8 +166,19 @@ int main(int argc, char *argv[]) {
     while (true)
     {
         string statusResp = sendRequest("GET", "/Simulation/status", "", "");
-        string getBody(statusResp);
-        if (statusBody.find("complete") != string::npos) break;
+        string statusBody = getBody(statusResp);
+
+        //Wait a period if there is an empty status response
+        if (statusBody.empty()) {
+            cerr << "Empty status response \n";
+            usleep(500000);
+            continue;
+        }
+
+        if (statusBody.find("complete") != string::npos) 
+        {
+            break;
+        }
 
         // Get next person in queue
         string personResp = sendRequest("GET", "/NextInput", "", "");
@@ -164,13 +195,19 @@ int main(int argc, char *argv[]) {
         string startFloor = parseField(personBody, "startFloor");
         string endFloor = parseField(personBody, "endFloor");
 
+        if (startFloor.empty() || endFloor.empty())
+        {
+            continue;
+        }
+
         // Find a valid elevator 
-        string chosenElevator = selectElevator(stoi(startFloor), stoi(endFloor));
+        string chosenElevator = selectElevator(stoi(startFloor), stoi(endFloor), elevatorIDs);
 
         if (!chosenElevator.empty()) {
-            sendRequest("PUT", "/AddPersonToElevator/" + personID + "/" + chosenElevator, "", "");
-
+            sendRequest("PUT", "/AddPersonToElevator/" + personID + 
+                "/" + chosenElevator, "", "");
         }
+
     }
     return 0;
 }
