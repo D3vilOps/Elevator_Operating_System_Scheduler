@@ -70,8 +70,8 @@ This will produce an executable named `scheduler_os`.
 | QA Test Case Framework | ✅ Complete |
 | Initial code structure | 🔄 In Progress |
 | API communication | 🔄 In Progress |
-| Multithreading implementation | ⏳ Pending |
-| Scheduler logic | ⏳ Pending |
+| Multithreading implementation | 🔄 In Progress |
+| Scheduler logic | 🔄 In Progress |
 | Testing and validation | ⏳ Pending |
 | Final project report | ⏳ Pending |
 
