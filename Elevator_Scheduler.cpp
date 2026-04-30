@@ -3,11 +3,15 @@
 Title        : Elevator Scheduler.cpp
 Description  : Elevator Scheduler for working with Elevator_OS by 
              : Eric Rees for CS4352 final project.
-Author       : Triston Schwab (R#11940154)
+Authors      : Triston Schwab (R#11940154), Caleb Brasuell (R#11984197)
+             : Matthew Cabrera (R#), Triston Barrientos (R#)
 Date         : 4/27/2026
 Version      : 0.3
 Usage        : 
-Notes        : Requires available port, 127.0.0.1:<port> to work.
+Notes        : Requires available port, 127.0.0.1:<port> to work
+             : Requres use if Unix or Linux system for socket programming.
+             : Alppys 3 threads to handle the scheduling of the elevators, and the communication with the API.
+             : Using FIFO scheduling, the first person in the queue will be assigned to the first elevator that can service their request.
              : Does not hard code a port value. 
 C++ Version  : C++ 17 
 ================================================================================
@@ -20,6 +24,7 @@ C++ Version  : C++ 17
 #include <sstream>
 #include <cstring>
 #include <fstream>
+#include <pthread.h>
 
 //Unix and Linux libraries for creating the network
 #include <unistd.h>
