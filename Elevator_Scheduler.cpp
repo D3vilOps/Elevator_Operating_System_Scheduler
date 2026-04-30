@@ -25,6 +25,7 @@ C++ Version  : C++ 17
 #include <cstring>
 #include <fstream>
 #include <pthread.h>
+#include <thread>
 
 //Unix and Linux libraries for creating the network
 #include <unistd.h>
@@ -32,6 +33,8 @@ C++ Version  : C++ 17
 #include <netinet/in.h>
 #include <arpa/inet.h>
 using namespace std;
+
+
 
 
 static int g_port; //Stores a port number
