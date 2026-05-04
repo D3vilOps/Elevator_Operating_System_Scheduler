@@ -171,7 +171,7 @@ void inputThread()
 {
     while (!g_simDone.load()) {
         //Check if simulation has completed
-        string statusBody = getBody(sendRequest("GET", "/Simulation/status", "")); // Get the currect status of Simulation
+        string statusBody = getBody(sendRequest("GET", "/Simulation/check", "")); // Get the currect status of Simulation
         if (statusBody.find("complete") != string::npos) {
             g_simDone.store(true); // Set the simulation done flag to true
             g_inputCV.notify_all(); // Notify all threads waiting on the input condition variable
@@ -312,7 +312,14 @@ void outputThread()
             g_outputQueue.pop();
         }
  
-        sendRequest("PUT", "/AddPersonToElevator/" + a.personID + "/" + a.elevatorID, "");
+        string response = getBody(sendRequest("PUT", "/AddPersonToElevator/" + a.personID + "/" + a.elevatorID, ""));
+        auto completionTime = steady_clock::now();
+
+        if (response.find("added") != string::npos) {
+            cout << "SUCCESS: Person " << a.personID << " assigned to elevator " << a.elevatorID << " | Completed at: " << duration_cast<milliseconds>(completionTime.time_since_epoch()).count() << "ms" << endl;
+        } else {
+            cout << "FAILED: Person " << a.personID << " could not be assigned to elevator " << a.elevatorID << " | Response: " << response << endl;
+        }
     }
 }
 
