@@ -42,7 +42,7 @@ This will produce an executable named `scheduler_os`.
 
 **Example:**
 ```bash
-./scheduler_os simple.bldg 5432
+./scheduler_os testing.bldg 5432
 ```
 
 - `path_to_building_file` — path to a `.bldg` configuration file describing the elevator system
@@ -57,6 +57,7 @@ This will produce an executable named `scheduler_os`.
 ├── README.md                        # This file
 ├── makefile                         # Build configuration
 ├── QA_Test_Case_Framework.docx      # QA/Verification test plan (Week 1)
+├── testing.bldg                     # Testing .bldg file to be used to practice with  (Week 2)
 └── src/                             # Source code (to be added)
 ```
 
