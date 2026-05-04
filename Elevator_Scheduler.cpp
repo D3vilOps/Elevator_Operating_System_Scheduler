@@ -165,7 +165,8 @@ int safeStoi(const string &s, int defaultVal = 0)
 }
 
 /*
-* inputThread function:
+* inputThread function: Takes in the inputs from the API
+* Uses the person struct to help take in the information.
 */
 void inputThread() 
 {
@@ -208,7 +209,9 @@ void inputThread()
 }
 
 /*
-* schedulerThread function:
+* schedulerThread function: Schedules the elevators according to an SPN policy,
+* in the case of a tiebreak, uses HRRN and FCFS as last resort.
+* Uses the Person struct for a person's information.
 */
 void schedulerThread() 
 {
@@ -244,9 +247,9 @@ void schedulerThread()
                 continue;
             }
 
-            int lowest   = safeStoi(parseField(body, "lowest"),       999999);
-            int highest  = safeStoi(parseField(body, "highest"),     -999999);
-            int curFloor = safeStoi(parseField(body, "currentFloor"),     -1);
+            int lowest   = safeStoi(parseField(body, "lowest"), 999999);
+            int highest  = safeStoi(parseField(body, "highest"), -999999);
+            int curFloor = safeStoi(parseField(body, "currentFloor"), -1);
  
             if (p.startFloor < lowest  || p.startFloor > highest) continue;
             if (p.endFloor   < lowest  || p.endFloor   > highest) continue;
@@ -286,7 +289,8 @@ void schedulerThread()
 }
 
 /*
-*outputThread function:
+*outputThread function: Outputs the elevators assignments. 
+* Uses the Assignment struct for its outputs.
 */
 void outputThread()
 {
