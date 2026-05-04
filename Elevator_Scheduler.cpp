@@ -13,7 +13,7 @@ Notes        : Requires available port, 127.0.0.1:<port> to work
              : Applies 3 threads to handle the scheduling of the elevators, and 
              : the communication with the API. 
              : Does not hard code a port value. Select elevator function absorbed by the 
-             : scheduler thread. Uses SPN scheduling and HRRN for tie breakingh
+             : scheduler thread. Uses SPN scheduling and HRRN for tie breaking
              : as well as FIFO for the last resort.
 C++ Version  : C++ 17 
 ================================================================================
