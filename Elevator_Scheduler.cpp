@@ -43,31 +43,32 @@ using namespace chrono;
 
 
 static int g_port = 0; //Stores a port number
-static vector<string> g_elevatorIDs;
+static vector<string> g_elevatorIDs; //Stores the elevator IDs read from the building file
+
 
 struct Person {
-    string id;
-    int startFloor;
-    int endFloor;
-    steady_clock::time_point arrivalTime;
+    string id;//Unique identifier for the person
+    int startFloor;//Floor the person starts on
+    int endFloor;//Floor the person wants to go to
+    steady_clock::time_point arrivalTime; //Time the person was received by the input thread
 };
 
 struct Assignment {
-    string personID;
-    string elevatorID;
+    string personID; //Unique identifier for the person
+    string elevatorID;//Unique identifier for the elevator
 };
 
 //Input for Scheduler Thread
-queue<Person> g_inputQueue;
-mutex g_inputMutex;
-condition_variable g_inputCV;
+queue<Person> g_inputQueue;//Queue to store incoming people from the API
+mutex g_inputMutex; //Mutex to protect access to the input queue
+condition_variable g_inputCV; //Condition variable to signal the scheduler thread when a new person is added to the input queue
 
 //Output for Scheduler Thread
-queue<Assignment> g_outputQueue;
-mutex g_outputMutex;
-condition_variable g_outputCV;
+queue<Assignment> g_outputQueue; //Queue to store assignments of people to elevators for the output thread
+mutex g_outputMutex; //Mutex to protect access to the output queue
+condition_variable g_outputCV; //Condition variable to signal the output thread when a new assignment is added to the output queue
 
-atomic<bool> g_simDone(false);
+atomic<bool> g_simDone(false); //Atomic flag to indicate when the simulation is complete, used to signal threads to exit when done
 
 /*
  * sendRequest function: Handles all communication 
@@ -124,9 +125,9 @@ string sendRequest(const string &method, const string &path, const string &body)
  * empty string.
  */
 string getBody(const string &response) {
-    auto pos = response.find("\r\n\r\n");
-    if (pos == string::npos) return "";
-    return response.substr(pos + 4);
+    auto pos = response.find("\r\n\r\n"); //Find the end of the headers
+    if (pos == string::npos) return ""; //No body found, return empty string
+    return response.substr(pos + 4); //Return the body of the response
 }
 
 /*
@@ -135,18 +136,17 @@ string getBody(const string &response) {
  * returns the value substring
  */
 string parseField(const string &body, const string &key) {
-    string search = key + "=";
-    auto pos = body.find(search);
-    if (pos == string::npos) return "";
-    pos += search.size();
-    auto end = body.find_first_of(";\r\n", pos);
-    if (end == string::npos) return body.substr(pos);
-    return body.substr(pos, end - pos);
+    string search = key + "="; //Search for the key followed by an equals sign
+    auto pos = body.find(search); //Find the position of the key in the body
+    if (pos == string::npos) return ""; //Key not found, return empty string
+    pos += search.size(); //Move position to the start of the value
+    auto end = body.find_first_of(";\r\n", pos); //Looking for the next ";" or newline
+    if (end == string::npos) return body.substr(pos);//No end found, return the rest of the string
+    return body.substr(pos, end - pos); //Return the value substring
 }
 
 /*
-* safeStoi function: Input parser, parses a string input and returns
-* the value. If string is empty or an invalid input returns the default value. 
+* safeStoi function: Safely converts a string to an integer, returning a default value if the string is empty or cannot be converted to an integer.
 */
 int safeStoi(const string &s, int defaultVal = 0) 
 {
