@@ -145,7 +145,8 @@ string parseField(const string &body, const string &key) {
 }
 
 /*
-* safeStoi function:
+* safeStoi function: Input parser, parses a string input and returns
+* the value. If string is empty or an invalid input returns the default value. 
 */
 int safeStoi(const string &s, int defaultVal = 0) 
 {
