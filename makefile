@@ -1,23 +1,15 @@
 # Compiler and flags
-CXX=g++
-CXXFLAGS= -std=c++17 -Wall -g -Wextra -pthread
-LDFLAGS  := -pthread
+CXX = g++
+CXXFLAGS = -Wall -Wextra -std=c++17
 
+# Default target
+all: scheduler_os
 
-# Targets
-TARGET = Elevator_Scheduler
-OBJS = Elevator_Scheduler.o
+# Linking the final executable and compiling
+scheduler_os: Elevator_Scheduler.cpp
+	$(CXX) $(CXXFLAGS) -o scheduler_os Elevator_Scheduler.cpp
 
-all: $(TARGET) clean
-
-$(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) $(LDFLAGS)
-
-#This target creates Elevator_Scheduler.o from Elevator_Scheduler.cpp
-Elevator_Scheduler.o: Elevator_Scheduler.cpp
-		$(CXX) -c Elevator_Scheduler.cpp $(CXXFLAGS)
-
-# For removing all object files the makefile created.
-.PHONY: clean
+# Cleaning up object files 
 clean:
-		rm -f $(OBJS)
+	rm -f scheduler_os
+
