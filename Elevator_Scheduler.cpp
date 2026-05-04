@@ -165,41 +165,42 @@ int safeStoi(const string &s, int defaultVal = 0)
 }
 
 /*
-* inputThread function: Takes in the inputs from the API
-* Uses the person struct to help take in the information.
+* inputThread function:
 */
 void inputThread() 
 {
     while (!g_simDone.load()) {
         //Check if simulation has completed
-        string statusBody = getBody(sendRequest("GET", "/Simulation/status", ""));
+        string statusBody = getBody(sendRequest("GET", "/Simulation/status", "")); // Get the currect status of Simulation
         if (statusBody.find("complete") != string::npos) {
-            g_simDone.store(true);
-            g_inputCV.notify_all();
-            g_outputCV.notify_all();
-            break;
+            g_simDone.store(true); // Set the simulation done flag to true
+            g_inputCV.notify_all(); // Notify all threads waiting on the input condition variable
+            g_outputCV.notify_all(); // Notify all threads waiting on the output condition variable
+            break; // Exit the loop and end the thread
         }
-
+        //Get the next person from the API
         string personBody = getBody(sendRequest("GET", "/NextInput", ""));
         if (personBody.empty() || personBody == "NONE") { 
             this_thread::sleep_for(milliseconds(200));
             continue;
         }
 
-        string idStr = parseField(personBody, "id");
-        string startStr = parseField(personBody, "startFloor");
-        string endStr = parseField(personBody, "endFloor");
+        string idStr = parseField(personBody, "id"); //Parse the person's ID 
+        string startStr = parseField(personBody, "startFloor");//Parse the person's starting floor
+        string endStr = parseField(personBody, "endFloor");//Parse the person's destination floor
 
+        //If any of the required fields are missing, skip this person
         if (idStr.empty() || startStr.empty() || endStr.empty()) { 
             continue;
         }
-
+ 
+        //Create a Person struct and fill it with the data
         Person p;
         p.id = idStr;
         p.startFloor = safeStoi(startStr);
         p.endFloor = safeStoi(endStr);
         p.arrivalTime = steady_clock::now();
-
+        //Add the person to the input queue and notify the scheduler thread
         {
             unique_lock<mutex> lock(g_inputMutex);
             g_inputQueue.push(p);
@@ -215,8 +216,9 @@ void inputThread()
 */
 void schedulerThread() 
 {
+    //Loop until the simulation is done and there are no more people to process
     while (true) {
-
+        //Get the next person from the input queue
         Person p;
         {
             unique_lock<mutex> lock(g_inputMutex);
@@ -230,13 +232,15 @@ void schedulerThread()
             {
                 break;
             }
-
+            //Pop the person from the input queue
             p = g_inputQueue.front();
             g_inputQueue.pop();
         }
         
+        //Calculate the wait time for this person
         double waitTime = duration<double>(steady_clock::now() - p.arrivalTime).count();
 
+      
         double bestRatio = -1.0;
         string bestElevator = "";
 
@@ -247,9 +251,9 @@ void schedulerThread()
                 continue;
             }
 
-            int lowest   = safeStoi(parseField(body, "lowest"), 999999);
-            int highest  = safeStoi(parseField(body, "highest"), -999999);
-            int curFloor = safeStoi(parseField(body, "currentFloor"), -1);
+            int lowest   = safeStoi(parseField(body, "lowest"),       999999);
+            int highest  = safeStoi(parseField(body, "highest"),     -999999);
+            int curFloor = safeStoi(parseField(body, "currentFloor"),     -1);
  
             if (p.startFloor < lowest  || p.startFloor > highest) continue;
             if (p.endFloor   < lowest  || p.endFloor   > highest) continue;
