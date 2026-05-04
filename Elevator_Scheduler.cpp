@@ -6,13 +6,15 @@ Description  : Elevator Scheduler for working with Elevator_OS by
 Authors      : Triston Schwab (R#11940154), Caleb Brasuell (R#11984197)
              : Matthew Cabrera (R#11802764), Triston Barrientos (R#11688728)
 Date         : 4/27/2026
-Version      : 0.3
+Version      : 1.0
 Usage        : 
 Notes        : Requires available port, 127.0.0.1:<port> to work
              : Requres use if Unix or Linux system for socket programming.
-             : Alppys 3 threads to handle the scheduling of the elevators, and the communication with the API.
-             : Using FIFO scheduling, the first person in the queue will be assigned to the first elevator that can service their request.
-             : Does not hard code a port value. 
+             : Alppys 3 threads to handle the scheduling of the elevators, and 
+             : the communication with the API. 
+             : Does not hard code a port value. Select elevator function absorbed by the 
+             : scheduler thread. Uses SPN scheduling and HRRN for tie breakingh
+             : as well as FIFO for the last resort.
 C++ Version  : C++ 17 
 ================================================================================
 */
@@ -22,22 +24,50 @@ C++ Version  : C++ 17
 #include <vector>
 #include <string>
 #include <sstream>
-#include <cstring>
 #include <fstream>
-#include <pthread.h>
 #include <thread>
+#include <mutex>
+#include <chrono>
+#include <queue>
+#include <atomic>
+#include <condition_variable>
 
 //Unix and Linux libraries for creating the network
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
 using namespace std;
+using namespace chrono;
 
 
+static int g_port = 0; //Stores a port number
+static vector<string> g_elevatorIDs;
 
+struct Person {
+    string id;
+    int startFloor;
+    int endFloor;
+    steady_clock::time_point arrivalTime;
+};
 
-static int g_port; //Stores a port number
+struct Assignment {
+    string personID;
+    string elevatorID;
+};
+
+//Input for Scheduler Thread
+queue<Person> g_inputQueue;
+mutex g_inputMutex;
+condition_variable g_inputCV;
+
+//Output for Scheduler Thread
+queue<Assignment> g_outputQueue;
+mutex g_outputMutex;
+condition_variable g_outputCV;
+
+atomic<bool> g_simDone(false);
 
 /*
  * sendRequest function: Handles all communication 
@@ -45,8 +75,8 @@ static int g_port; //Stores a port number
  * and connecting to the server, if it fails simply returns an empty string.
  */
 
-string sendRequest(const string &method, const string &path,
-const string &sid, const string &body) {
+string sendRequest(const string &method, const string &path, const string &body) 
+{
     //Create the socket to connect to
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) return "";
@@ -67,7 +97,6 @@ const string &sid, const string &body) {
     ostringstream req;
     req << method << " " << path << " HTTP/1.0\r\n";
     req << "Host: 127.0.0.1:" << g_port << "\r\n";
-    if (!sid.empty()) req << "X-Session: " << sid << "\r\n";
     req << "Content-Type: text/plain\r\n";
     req << "Content-Length: " << body.size() << "\r\n";
     req << "\r\n";
@@ -116,106 +145,220 @@ string parseField(const string &body, const string &key) {
 }
 
 /*
-* selectElevator: Takes elevator ids read from 
-* the building file from main.
+* safeStoi function:
 */
-string selectElevator(int startFloor, int endFloor, const vector<string>& elevatorIDs) {
-    
-    for (const string& eid : elevatorIDs) 
+int safeStoi(const string &s, int defaultVal = 0) 
+{
+    if (s.empty()) 
     {
-        string resp = sendRequest("GET", "/ElevatorStatus/" + eid, "", "");
-        string body = getBody(resp);
-        if (body == "DNE" || body.empty())
-        {
+        return defaultVal;
+    }
+    try 
+    {
+        return stoi(s);
+    }
+    catch(...) 
+    {
+        return defaultVal;
+    }
+}
+
+/*
+* inputThread function:
+*/
+void inputThread() 
+{
+    while (!g_simDone.load()) {
+        //Check if simulation has completed
+        string statusBody = getBody(sendRequest("GET", "/Simulation/status", ""));
+        if (statusBody.find("complete") != string::npos) {
+            g_simDone.store(true);
+            g_inputCV.notify_all();
+            g_outputCV.notify_all();
+            break;
+        }
+
+        string personBody = getBody(sendRequest("GET", "/NextInput", ""));
+        if (personBody.empty() || personBody == "NONE") { 
+            this_thread::sleep_for(milliseconds(200));
             continue;
         }
 
-        int lowest = stoi(parseField(body, "lowest"));
-        int highest = stoi(parseField(body, "highest"));
+        string idStr = parseField(personBody, "id");
+        string startStr = parseField(personBody, "startFloor");
+        string endStr = parseField(personBody, "endFloor");
 
-        if ((startFloor >= lowest && startFloor <= highest) &&
-            (endFloor >= lowest && endFloor <= highest))
-        {
-            return eid;
+        if (idStr.empty() || startStr.empty() || endStr.empty()) { 
+            continue;
         }
+
+        Person p;
+        p.id = idStr;
+        p.startFloor = safeStoi(startStr);
+        p.endFloor = safeStoi(endStr);
+        p.arrivalTime = steady_clock::now();
+
+        {
+            unique_lock<mutex> lock(g_inputMutex);
+            g_inputQueue.push(p);
+        }
+        g_inputCV.notify_one();
     }
-    //No valid elevator exists
-    return "";
+}
+
+/*
+* schedulerThread function:
+*/
+void schedulerThread() 
+{
+    while (true) {
+
+        Person p;
+        {
+            unique_lock<mutex> lock(g_inputMutex);
+            
+            g_inputCV.wait(lock, []
+            {
+                return !g_inputQueue.empty() || g_simDone.load();
+            });
+
+            if (g_inputQueue.empty() && g_simDone.load())
+            {
+                break;
+            }
+
+            p = g_inputQueue.front();
+            g_inputQueue.pop();
+        }
+        
+        double waitTime = duration<double>(steady_clock::now() - p.arrivalTime).count();
+
+        double bestRatio = -1.0;
+        string bestElevator = "";
+
+        for (const string &eid : g_elevatorIDs) {
+            string body = getBody(sendRequest("GET", "/ElevatorStatus/" + eid, ""));
+            if (body.empty() || body == "DNE") 
+            {
+                continue;
+            }
+
+            int lowest   = safeStoi(parseField(body, "lowest"),       999999);
+            int highest  = safeStoi(parseField(body, "highest"),     -999999);
+            int curFloor = safeStoi(parseField(body, "currentFloor"),     -1);
+ 
+            if (p.startFloor < lowest  || p.startFloor > highest) continue;
+            if (p.endFloor   < lowest  || p.endFloor   > highest) continue;
+            if (curFloor < 0) continue;
+ 
+            double serviceTime = abs(curFloor - p.startFloor)
+                               + abs(p.startFloor - p.endFloor);
+            if (serviceTime < 1.0) serviceTime = 1.0;
+ 
+            double ratio = (waitTime + serviceTime) / serviceTime;
+            if (ratio > bestRatio) {
+                bestRatio    = ratio;
+                bestElevator = eid;
+            }
+        }
+
+        if (bestElevator.empty()) {
+            // No elevator available yet — re-queue and retry
+            {
+                unique_lock<mutex> lock(g_inputMutex);
+                g_inputQueue.push(p);
+            }
+            g_inputCV.notify_one();
+            this_thread::sleep_for(milliseconds(100));
+            continue;
+        }
+ 
+        {
+            unique_lock<mutex> lock(g_outputMutex);
+            g_outputQueue.push({p.id, bestElevator});
+        }
+        g_outputCV.notify_one();
+    }
+ 
+    g_outputCV.notify_all();
     
 }
+
+/*
+*outputThread function:
+*/
+void outputThread()
+{
+    while (true) {
+ 
+        Assignment a;
+        {
+            unique_lock<mutex> lock(g_outputMutex);
+            g_outputCV.wait(lock, [] {
+                return !g_outputQueue.empty() || g_simDone.load();
+            });
+            if (g_outputQueue.empty() && g_simDone.load()) break;
+ 
+            a = g_outputQueue.front();
+            g_outputQueue.pop();
+        }
+ 
+        sendRequest("PUT", "/AddPersonToElevator/" + a.personID + "/" + a.elevatorID, "");
+    }
+}
+
 
 /*
  * main function: 
  */
 int main(int argc, char *argv[]) {
-    if (argc < 3) return 1;
+    if (argc < 3) {
+        cerr << "Usage: " << argv[0] << " <building_file> <port_number>\n";
+        return 1;
+    }
+ 
+    try   { g_port = stoi(argv[2]); }
+    catch (...) {
+        cerr << "Error: Invalid port number '" << argv[2] << "'\n";
+        return 1;
+    }
+    if (g_port <= 0 || g_port > 65535) {
+        cerr << "Error: Port must be between 1 and 65535.\n";
+        return 1;
+    }
+ 
     ifstream buildingFile(argv[1]);
-    g_port = stoi(argv[2]); //Stores the port number for the session
-    vector<string> elevatorIDs;
+    if (!buildingFile.is_open()) {
+        cerr << "Error: Cannot open building file '" << argv[1] << "'\n";
+        return 1;
+    }
+ 
+    //Read one elevator per line
     string line;
-
-    while (getline(buildingFile, line)) 
-    {
-        if (line.empty())
-        {
-            continue;
-        }
-
-        istringstream iss(line);
-        string bay;
-        iss >> bay;
-        elevatorIDs.push_back(bay);
+    while (getline(buildingFile, line)) {
+        if (line.empty()) continue;
+        //Look for the first whitespace to isolate the first token
+        auto end = line.find("\t");
+        string eid = (end == string::npos) ? line : line.substr(0, end);
+        if (!eid.empty()) g_elevatorIDs.push_back(eid);
     }
-
-
-    sendRequest("PUT", "/Simulation/start", "", "");
-
-    //Temporary stand in scheduling loop
-    while (true)
-    {
-        string statusResp = sendRequest("GET", "/Simulation/status", "", "");
-        string statusBody = getBody(statusResp);
-
-        //Wait a period if there is an empty status response
-        if (statusBody.empty()) {
-            cerr << "Empty status response \n";
-            usleep(500000);
-            continue;
-        }
-
-        if (statusBody.find("complete") != string::npos) 
-        {
-            break;
-        }
-
-        // Get next person in queue
-        string personResp = sendRequest("GET", "/NextInput", "", "");
-        string personBody = getBody(personResp);
-
-        if (personBody == "NONE" || personBody.empty()) {
-            // Nothing in queue, wait a moment and try again
-            usleep(500000);
-            continue;
-        }
-
-        // Parse person data
-        string personID = parseField(personBody, "id");
-        string startFloor = parseField(personBody, "startFloor");
-        string endFloor = parseField(personBody, "endFloor");
-
-        if (startFloor.empty() || endFloor.empty())
-        {
-            continue;
-        }
-
-        // Find a valid elevator 
-        string chosenElevator = selectElevator(stoi(startFloor), stoi(endFloor), elevatorIDs);
-
-        if (!chosenElevator.empty()) {
-            sendRequest("PUT", "/AddPersonToElevator/" + personID + 
-                "/" + chosenElevator, "", "");
-        }
-
+ 
+    if (g_elevatorIDs.empty()) {
+        cerr << "Error: No elevator IDs found in building file.\n";
+        return 1;
     }
+ 
+    sendRequest("PUT", "/Simulation/start", "");
+ 
+    // Launch the threads
+    thread tInput(inputThread);
+    thread tScheduler(schedulerThread);
+    thread tOutput(outputThread);
+ 
+    //Join the threads together
+    tInput.join();
+    tScheduler.join();
+    tOutput.join();
+ 
     return 0;
 }
