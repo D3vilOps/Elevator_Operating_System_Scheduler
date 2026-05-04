@@ -185,12 +185,22 @@ void inputThread()
             continue;
         }
 
-        string idStr = parseField(personBody, "id"); //Parse the person's ID 
-        string startStr = parseField(personBody, "startFloor");//Parse the person's starting floor
-        string endStr = parseField(personBody, "endFloor");//Parse the person's destination floor
+        stringstream ss(personBody);
+        string idStr, startStr, endStr;
+        getline(ss, idStr, '|');
+        getline(ss, startStr, '|');
+        getline(ss, endStr, '|');
 
-        //If any of the required fields are missing, skip this person
-        if (idStr.empty() || startStr.empty() || endStr.empty()) { 
+        // Trim whitespace
+        auto trim = [](string &s) {
+            s.erase(0, s.find_first_not_of(" \t\r\n"));
+            s.erase(s.find_last_not_of(" \t\r\n") + 1);
+        };
+        trim(idStr);
+        trim(startStr);
+        trim(endStr);
+
+        if (idStr.empty() || startStr.empty() || endStr.empty()) {
             continue;
         }
  
@@ -251,13 +261,29 @@ void schedulerThread()
                 continue;
             }
 
-            int lowest   = safeStoi(parseField(body, "lowest"),       999999);
-            int highest  = safeStoi(parseField(body, "highest"),     -999999);
-            int curFloor = safeStoi(parseField(body, "currentFloor"),     -1);
- 
-            if (p.startFloor < lowest  || p.startFloor > highest) continue;
-            if (p.endFloor   < lowest  || p.endFloor   > highest) continue;
-            if (curFloor < 0) continue;
+            stringstream ess(body);
+            string bayID, curFloorStr, direction, passengerCountStr, remainingCapStr;
+            getline(ess, bayID, '|');
+            getline(ess, curFloorStr, '|');
+            getline(ess, direction, '|');
+            getline(ess, passengerCountStr, '|');
+            getline(ess, remainingCapStr, '|');
+
+            auto trim = [](string &s) {
+                s.erase(0, s.find_first_not_of(" \t\r\n"));
+                s.erase(s.find_last_not_of(" \t\r\n") + 1);
+            };
+
+            trim(bayID);
+            trim(curFloorStr);
+            trim(direction);
+            trim(passengerCountStr);
+            trim(remainingCapStr);
+
+            int curFloor = safeStoi(curFloorStr, -1);
+            int remainingCap = safeStoi(remainingCapStr, 0);
+
+            if (remainingCap <= 0) continue;
  
             double serviceTime = abs(curFloor - p.startFloor)
                                + abs(p.startFloor - p.endFloor);
