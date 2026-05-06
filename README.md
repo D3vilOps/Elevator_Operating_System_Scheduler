@@ -73,7 +73,7 @@ This will produce an executable named `scheduler_os`.
 | API communication | ✅ Complete |
 | Multithreading implementation | ✅ Complete |
 | Scheduler logic | ✅ Complete |
-| Testing and validation | 🔄 In Progress |
+| Testing and validation | ✅ Complete  |
 | Final project report | 🔄 In Progress |
 
 ---
