@@ -24,8 +24,6 @@ The scheduler is written in C/C++ and uses multithreading to coordinate three co
 
 ## How to Compile
 
-> *(To be updated by Lead Developer once initial code is complete)*
-
 ```bash
 make
 ```
@@ -37,16 +35,14 @@ This will produce an executable named `scheduler_os`.
 ## How to Run
 
 ```bash
-./scheduler_os <path_to_building_file> <port_number>
+sbatch /lustre/work/errees/courses/cs4352/final_project/Elevator_OS/submission_scripts/highrise_busy_grader.sh
 ```
 
-**Example:**
+**Access Grader:**
+
 ```bash
-./scheduler_os testing.bldg 5432
+cat grader.log
 ```
-
-- `path_to_building_file` — path to a `.bldg` configuration file describing the elevator system
-- `port_number` — port where the Elevator Operating System API is running
 
 ---
 
