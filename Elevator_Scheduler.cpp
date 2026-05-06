@@ -6,14 +6,15 @@ Description  : Elevator Scheduler for working with Elevator_OS by
 Authors      : Triston Schwab (R#11940154), Caleb Brasuell (R#11984197)
              : Matthew Cabrera (R#11802764), Triston Barrientos (R#11688728)
 Date         : 5/3/2026
-Version      : 1.0
+Version      : 2.0
 Usage        : 
 Notes        : Requires available port, 127.0.0.1:<port> to work
              : Requires use of Unix or Linux system for socket programming.
              : Applies 3 threads to handle the scheduling of the elevators, and 
              : the communication with the API. 
              : Does not hard code a port value. Select elevator function absorbed by the 
-             : scheduler thread. Uses SRT (Shortest Remaining Time) scheduling.
+             : scheduler thread. Uses SRT (Shortest Remaining Time) scheduling 
+             : after SPN proved to be inefficient on large scale systems.
 C++ Version  : C++ 17 
 ================================================================================
 */
@@ -44,14 +45,16 @@ using namespace chrono;
 static int g_port = 0; //Stores a port number
 static vector<string> g_elevatorIDs; //Stores the elevator IDs read from the building file
 
-struct ElevatorInfo {
+//Elevator object information
+struct Elevator {
     string id;
     int lowestFloor;
     int highestFloor;
 };
 
-static vector<ElevatorInfo> g_elevatorInfo;
+static vector<Elevator> g_elevator;
 
+//Person object information
 struct Person {
     string id;              //Unique identifier for the person
     int startFloor;         //Floor the person starts on
@@ -59,6 +62,7 @@ struct Person {
     steady_clock::time_point arrivalTime; //Time the person was received by the input thread
 };
 
+//Elevator assignment object information
 struct Assignment {
     string personID;   //Unique identifier for the person
     string elevatorID; //Unique identifier for the elevator
@@ -121,7 +125,9 @@ string sendRequest(const string &method, const string &path, const string &body)
 }
 
 /*
- * getBody function: Finds and separates out the body in the message.
+ * getBody function: Finds and separates out the body in the message
+ * in event string::npos, where no found message was received, return an
+ * empty string.
  */
 string getBody(const string &response) {
     auto pos = response.find("\r\n\r\n");
@@ -131,6 +137,7 @@ string getBody(const string &response) {
 
 /*
  * parseField function: Parses values by searching for key=value format.
+ * Returns the value substring. 
  */
 string parseField(const string &body, const string &key) {
     string search = key + "=";
@@ -147,9 +154,16 @@ string parseField(const string &body, const string &key) {
  */
 int safeStoi(const string &s, int defaultVal = 0) 
 {
-    if (s.empty()) return defaultVal;
-    try { return stoi(s); }
-    catch(...) { return defaultVal; }
+    if (s.empty()) 
+    {
+        return defaultVal;
+    }
+    try { 
+        return stoi(s); 
+    }
+    catch(...) { 
+        return defaultVal; 
+    }
 }
 
 /*
@@ -203,7 +217,8 @@ void inputThread()
 }
 
 /*
- * schedulerThread function: Schedules passengers to elevators using SRT.
+ * schedulerThread function: Schedules passengers to elevators using SRT policy.
+ * Updated from the SPN policy with HRRN tie breaking.
  */
 void schedulerThread() 
 {
@@ -267,9 +282,11 @@ void schedulerThread()
             if (remainingCap <= 0) continue;
 
             // Check floor range from building file
-            ElevatorInfo* info = nullptr;
-            for (auto &ei : g_elevatorInfo) {
-                if (ei.id == eid) { info = &ei; break; }
+            Elevator* info = nullptr;
+            for (auto &ei : g_elevator) {
+                if (ei.id == eid) { 
+                    info = &ei; break; 
+                }
             }
             if (info) {
                 if (p.startFloor < info->lowestFloor || p.startFloor > info->highestFloor) continue;
@@ -314,8 +331,8 @@ void schedulerThread()
 
                 int cap = safeStoi(capStr, 0);
 
-                ElevatorInfo* info = nullptr;
-                for (auto &ei : g_elevatorInfo) {
+                Elevator* info = nullptr;
+                for (auto &ei : g_elevator) {
                     if (ei.id == eid) { info = &ei; break; }
                 }
                 if (info) {
@@ -410,7 +427,7 @@ int main(int argc, char *argv[]) {
         getline(ls, cap, '\t');
         if (!eid.empty()) {
             g_elevatorIDs.push_back(eid);
-            g_elevatorInfo.push_back({eid, safeStoi(low), safeStoi(high)});
+            g_elevator.push_back({eid, safeStoi(low), safeStoi(high)});
         }
     }
 
