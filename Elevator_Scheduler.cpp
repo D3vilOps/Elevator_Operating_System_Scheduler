@@ -31,6 +31,7 @@ C++ Version  : C++ 17
 #include <queue>
 #include <atomic>
 #include <condition_variable>
+#include <unordered_map>
 
 //Unix and Linux libraries for creating the network
 #include <unistd.h>
@@ -44,6 +45,14 @@ using namespace chrono;
 
 static int g_port = 0; //Stores a port number
 static vector<string> g_elevatorIDs; //Stores the elevator IDs read from the building file
+
+struct ElevatorInfo {
+    string id;
+    int lowestFloor;
+    int highestFloor;
+};
+
+static vector<ElevatorInfo> g_elevatorInfo;
 
 
 struct Person {
@@ -181,7 +190,7 @@ void inputThread()
         //Get the next person from the API
         string personBody = getBody(sendRequest("GET", "/NextInput", ""));
         if (personBody.empty() || personBody == "NONE") { 
-            this_thread::sleep_for(milliseconds(200));
+            this_thread::sleep_for(milliseconds(50));
             continue;
         }
 
@@ -253,9 +262,18 @@ void schedulerThread()
       
         double bestRatio = -1.0;
         string bestElevator = "";
+        static unordered_map<string, string> elevatorStatusCache;
+        static auto lastCacheTime = steady_clock::now();
+
+        if (duration<double>(steady_clock::now() - lastCacheTime).count() > 0.1) {
+            for (const string &eid : g_elevatorIDs) {
+                elevatorStatusCache[eid] = getBody(sendRequest("GET", "/ElevatorStatus/" + eid, ""));
+            }
+            lastCacheTime = steady_clock::now();
+        }
 
         for (const string &eid : g_elevatorIDs) {
-            string body = getBody(sendRequest("GET", "/ElevatorStatus/" + eid, ""));
+            string body = elevatorStatusCache.count(eid) ? elevatorStatusCache[eid] : getBody(sendRequest("GET", "/ElevatorStatus/" + eid, ""));
             if (body.empty() || body == "DNE") 
             {
                 continue;
@@ -284,28 +302,59 @@ void schedulerThread()
             int remainingCap = safeStoi(remainingCapStr, 0);
 
             if (remainingCap <= 0) continue;
+
+            // Check floor range from building file
+            ElevatorInfo* info = nullptr;
+            for (auto &ei : g_elevatorInfo) {
+                if (ei.id == eid) { info = &ei; break; }
+            }
+            if (info) {
+                if (p.startFloor < info->lowestFloor || p.startFloor > info->highestFloor) continue;
+                if (p.endFloor < info->lowestFloor || p.endFloor > info->highestFloor) continue;
+            }
  
-            double serviceTime = abs(curFloor - p.startFloor)
-                               + abs(p.startFloor - p.endFloor);
+            double distanceToPassenger = abs(curFloor - p.startFloor);
+            double tripDistance = abs(p.startFloor - p.endFloor);
+            double serviceTime = distanceToPassenger + tripDistance;
             if (serviceTime < 1.0) serviceTime = 1.0;
- 
-            double ratio = (waitTime + serviceTime) / serviceTime;
-            if (ratio > bestRatio) {
-                bestRatio    = ratio;
+
+            // SRT - pick elevator with shortest remaining service time
+            double score = -(distanceToPassenger + tripDistance);
+
+            if (score > bestRatio) {
+                bestRatio    = score;
                 bestElevator = eid;
             }
+
         }
 
         if (bestElevator.empty()) {
-            // No elevator available yet — re-queue and retry
-            {
-                unique_lock<mutex> lock(g_inputMutex);
-                g_inputQueue.push(p);
-            }
-            g_inputCV.notify_one();
-            this_thread::sleep_for(milliseconds(100));
-            continue;
-        }
+            // Force assign to elevator with most remaining capacity
+            int maxCap = -1;
+            for (const string &eid : g_elevatorIDs) {
+                string body = elevatorStatusCache.count(eid) ? elevatorStatusCache[eid] : getBody(sendRequest("GET", "/ElevatorStatus/" + eid, ""));
+                if (body.empty() || body == "DNE") continue;
+                stringstream ess2(body);
+                string b1, b2, b3, b4, capStr;
+                getline(ess2, b1, '|');
+                getline(ess2, b2, '|');
+                getline(ess2, b3, '|');
+                getline(ess2, b4, '|');
+                getline(ess2, capStr, '|');
+                auto trim2 = [](string &s) {
+                    s.erase(0, s.find_first_not_of(" \t\r\n"));
+                    s.erase(s.find_last_not_of(" \t\r\n") + 1);
+                };
+                trim2(capStr);
+                int cap = safeStoi(capStr, 0);
+                if (cap > maxCap) {
+                    maxCap = cap;
+                    bestElevator = eid;
+                }
+    }
+}
+
+if (bestElevator.empty()) continue;
  
         {
             unique_lock<mutex> lock(g_outputMutex);
@@ -379,10 +428,17 @@ int main(int argc, char *argv[]) {
     string line;
     while (getline(buildingFile, line)) {
         if (line.empty()) continue;
-        //Look for the first whitespace to isolate the first token
-        auto end = line.find("\t");
-        string eid = (end == string::npos) ? line : line.substr(0, end);
-        if (!eid.empty()) g_elevatorIDs.push_back(eid);
+        stringstream ls(line);
+        string eid, low, high, cur, cap;
+        getline(ls, eid, '\t');
+        getline(ls, low, '\t');
+        getline(ls, high, '\t');
+        getline(ls, cur, '\t');
+        getline(ls, cap, '\t');
+        if (!eid.empty()) {
+            g_elevatorIDs.push_back(eid);
+            g_elevatorInfo.push_back({eid, safeStoi(low), safeStoi(high)});
+        }
     }
  
     if (g_elevatorIDs.empty()) {
