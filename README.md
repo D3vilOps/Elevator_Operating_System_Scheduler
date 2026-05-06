@@ -50,19 +50,6 @@ This will produce an executable named `scheduler_os`.
 
 ---
 
-## Repository Structure
-
-```
-/
-├── README.md                        # This file
-├── makefile                         # Build configuration
-├── QA_Test_Case_Framework.docx      # QA/Verification test plan (Week 1)
-├── testing.bldg                     # Testing .bldg file to be used to practice with  (Week 2)
-└── Elevator_Scheduler.cpp           # Current .cpp file that will be updated throuhgout progression of project
-```
-
----
-
 ## Project Status
 
 | Component | Status |
