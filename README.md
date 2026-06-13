@@ -57,7 +57,7 @@ cat grader.log
 | Multithreading implementation | ✅ Complete |
 | Scheduler logic | ✅ Complete |
 | Testing and validation | ✅ Complete  |
-| Final project report | 🔄 In Progress |
+| Final project report | ✅ Complete |
 
 ---
 
