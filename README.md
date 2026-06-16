@@ -5,6 +5,8 @@
 
 ## Project Overview
 
+This is a fork of the orignal assignment project for CS4352 Operating Systems project for Eric Rees from 2026 Spring Semester for group 9. This is my personal improvement work of the project after the fact for my own practice and learning as the lead developer of the original project.
+
 This project implements a scheduler for a simulated Elevator Operating System. The simulation environment is provided as a separate process. Our program communicates with it through a defined HTTP-based API to continuously retrieve passenger input, make scheduling decisions, and issue elevator assignments in real time.
 
 The scheduler is written in C/C++ and uses multithreading to coordinate three concurrent responsibilities: input communication, scheduling computation, and output communication.
@@ -48,21 +50,3 @@ cat grader.log
 
 ---
 
-## Project Status
-
-| Component | Status |
-|-----------|--------|
-| Repository setup | ✅ Complete |
-| QA Test Case Framework | ✅ Complete |
-| Initial code structure | ✅ Complete |
-| API communication | ✅ Complete |
-| Multithreading implementation | ✅ Complete |
-| Scheduler logic | ✅ Complete |
-| Testing and validation | ✅ Complete  |
-| Final project report | ✅ Complete |
-
----
-
-## Weekly Check-Ins
-
-Weekly status reports are submitted every Monday to RaiderCanvas by the Project Manager per course requirements.
