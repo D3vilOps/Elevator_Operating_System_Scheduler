@@ -34,6 +34,8 @@ This will produce an executable named `scheduler_os`.
 
 ## How to Run
 
+Runs on the Texas Tech high powered perfomance center. 
+
 ```bash
 sbatch /lustre/work/errees/courses/cs4352/final_project/Elevator_OS/submission_scripts/highrise_busy_grader.sh
 ```
